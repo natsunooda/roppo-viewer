@@ -853,6 +853,10 @@ document.addEventListener('keydown', e => {
   }
 });
 $('menubtn').addEventListener('click', () => $('sidebar').classList.toggle('show'));
+window.addEventListener('hashchange', () => {
+  const m = location.hash.match(/^#([a-z]+)\/(.+)$/);
+  if (m && LAWS.some(l => l.key === m[1])) openLaw(m[1], decodeURIComponent(m[2]));
+});
 
 /* ================= 起動 ================= */
 (function boot(){
