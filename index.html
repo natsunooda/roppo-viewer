@@ -82,7 +82,7 @@ mark{background:var(--mark); color:inherit; border-radius:2px; padding:0 1px}
 }
 #mapbar .seg{
   position:relative; display:flex; align-items:center; justify-content:center;
-  min-width:0; cursor:pointer; border-right:1px solid var(--border); overflow:hidden;
+  flex-basis:0; min-width:0; cursor:pointer; border-right:1px solid var(--border); overflow:hidden;
 }
 #mapbar .seg span{
   font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
@@ -256,6 +256,7 @@ const LAWS = [
   {key:'kenpo', id:'321CONSTITUTION',  tab:'憲法', full:'日本国憲法'},
   {key:'minpo', id:'129AC0000000089',  tab:'民法', full:'民法'},
   {key:'shoho', id:'132AC0000000048',  tab:'商法', full:'商法'},
+  {key:'kaisha', id:'417AC0000000086', tab:'会社法', full:'会社法'},
   {key:'keiho', id:'140AC0000000045',  tab:'刑法', full:'刑法'},
   {key:'minso', id:'408AC0000000109',  tab:'民訴', full:'民事訴訟法'},
   {key:'keiso', id:'323AC0000000131',  tab:'刑訴', full:'刑事訴訟法'},
