@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>六法ビューア</title>
+<style>
+:root{
+  --bg:#f7f6f3; --panel:#ffffff; --fg:#1f2328; --muted:#6b7280; --border:#e2e0da;
+  --accent:#4a5fa5; --accent-weak:#eef1f9; --mark:#fde68a; --flash:#fff3bf;
+  --shadow:0 8px 24px rgba(0,0,0,.12);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#15171b; --panel:#1d2026; --fg:#e6e4df; --muted:#9aa0a8; --border:#33373f;
+    --accent:#8ea2d8; --accent-weak:#262c3a; --mark:#7a5d00; --flash:#4a3f10;
+    --shadow:0 8px 24px rgba(0,0,0,.5);
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans",sans-serif;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+button{font-family:inherit; color:inherit}
+
+/* ---------- header ---------- */
+header{
+  flex:0 0 auto; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:8px 14px 6px; border-bottom:1px solid var(--border); background:var(--panel);
+}
+#brand{font-weight:700; font-size:15px; letter-spacing:.05em; white-space:nowrap}
+#brand small{font-weight:400; color:var(--muted); margin-left:6px; font-size:11px}
+#tabs{display:flex; gap:4px; flex-wrap:wrap}
+#tabs button{
+  border:1px solid var(--border); background:transparent; border-radius:7px;
+  padding:5px 13px; font-size:13.5px; cursor:pointer; line-height:1;
+}
+#tabs button:hover{background:var(--accent-weak)}
+#tabs button.on{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600}
+#searchwrap{margin-left:auto; position:relative}
+#q{
+  width:260px; max-width:40vw; padding:6px 10px; font-size:13px;
+  border:1px solid var(--border); border-radius:7px; background:var(--bg); color:var(--fg); outline:none;
+}
+#q:focus{border-color:var(--accent)}
+#hits{
+  display:none; position:absolute; right:0; top:calc(100% + 6px); z-index:50;
+  width:440px; max-width:80vw; max-height:62vh; overflow:auto;
+  background:var(--panel); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow);
+}
+#hits .hit{padding:8px 12px; border-bottom:1px solid var(--border); cursor:pointer; font-size:12.5px}
+#hits .hit:last-child{border-bottom:none}
+#hits .hit:hover{background:var(--accent-weak)}
+#hits .hit b{font-size:13px}
+#hits .hit .snip{color:var(--muted); margin-top:2px; line-height:1.5}
+#hits .none{padding:10px 12px; color:var(--muted); font-size:12.5px}
+mark{background:var(--mark); color:inherit; border-radius:2px; padding:0 1px}
+
+/* ---------- map bar ---------- */
+#mapbar{
+  flex:0 0 auto; position:relative; display:flex; height:30px;
+  border-bottom:1px solid var(--border); background:var(--panel); user-select:none;
+}
+#mapbar .seg{
+  position:relative; display:flex; align-items:center; justify-content:center;
+  min-width:0; cursor:pointer; border-right:1px solid var(--border); overflow:hidden;
+}
+#mapbar .seg span{
+  font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  padding:0 6px; color:var(--fg); opacity:.75;
+}
+#mapbar .seg.on span{opacity:1; font-weight:700}
+#mapbar .seg:hover span{opacity:1}
+#mapmark{
+  position:absolute; top:0; bottom:0; width:2.5px; background:#e11d48;
+  box-shadow:0 0 6px rgba(225,29,72,.7); pointer-events:none; transition:left .15s;
+}
+
+/* ---------- main split ---------- */
+#main{flex:1; display:flex; min-height:0}
+#sidebar{
+  flex:0 0 300px; overflow:auto; background:var(--panel);
+  border-right:1px solid var(--border); padding:8px 6px 40px; font-size:13px;
+}
+.tnode>.tkids{display:none}
+.tnode.open>.tkids{display:block}
+.trow{
+  display:flex; align-items:baseline; gap:4px; padding:3.5px 6px; border-radius:6px;
+  cursor:pointer; line-height:1.45;
+}
+.trow:hover{background:var(--accent-weak)}
+.trow.cur{background:var(--accent-weak); box-shadow:inset 2.5px 0 0 var(--accent)}
+.trow.cur .ttl{font-weight:700}
+.tcaret{
+  flex:0 0 14px; text-align:center; font-size:9px; color:var(--muted);
+  transition:transform .12s; cursor:pointer; align-self:center;
+}
+.tnode.open>.trow .tcaret{transform:rotate(90deg)}
+.tcaret.leaf{visibility:hidden}
+.ttl{flex:1; min-width:0}
+.trange{flex:0 0 auto; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+.tkids{margin-left:13px; border-left:1px dotted var(--border); padding-left:2px}
+
+/* ---------- right pane ---------- */
+#right{flex:1; display:flex; flex-direction:column; min-width:0}
+#crumbs{
+  flex:0 0 auto; display:flex; align-items:center; gap:6px;
+  padding:7px 18px; font-size:12.5px; background:var(--panel);
+  border-bottom:1px solid var(--border); white-space:nowrap; overflow:hidden;
+}
+#crumbs .cr{
+  color:var(--accent); cursor:pointer; overflow:hidden; text-overflow:ellipsis;
+  flex:0 1 auto; min-width:2.5em;
+}
+#crumbs .cr:hover{text-decoration:underline}
+#crumbs .cra{font-weight:700; color:var(--fg); flex:0 1 auto; overflow:hidden; text-overflow:ellipsis}
+#crumbs .sep{color:var(--muted); flex:0 0 auto}
+#crumbs .lawname{font-weight:700; color:var(--fg); flex:0 0 auto}
+#content{flex:1; overflow-y:auto; position:relative; overscroll-behavior:contain}
+#page{max-width:760px; margin:0 auto; padding:20px 34px 55vh}
+
+/* ---------- law text ---------- */
+.lawmeta{
+  font-size:11.5px; color:var(--muted); line-height:1.7; margin-bottom:26px;
+  padding:10px 14px; background:var(--panel); border:1px solid var(--border); border-radius:9px;
+}
+.enact{font-size:12px; color:var(--muted); margin:0 0 4px}
+.shead{font-weight:700; line-height:1.5; scroll-margin-top:10px}
+.sh-Preamble,.sh-Part{
+  font-size:21px; margin:64px 0 10px; padding:6px 0 6px 14px;
+  border-left:5px solid var(--accent);
+}
+.sh-Chapter{font-size:17.5px; margin:46px 0 6px; padding-left:14px; border-left:3.5px solid var(--accent)}
+.sh-Section{font-size:15.5px; margin:36px 0 4px; color:var(--accent)}
+.sh-Subsection{font-size:14px; margin:28px 0 2px; color:var(--accent)}
+.sh-Division{font-size:13px; margin:22px 0 0; color:var(--muted)}
+.shead:first-child{margin-top:6px}
+.art{
+  margin:20px 0; font-family:"Hiragino Mincho ProN","Yu Mincho","YuMincho",serif;
+  font-size:15.5px; line-height:2.0; scroll-margin-top:10px;
+  border-radius:8px; transition:background .4s;
+}
+.art.flash{background:var(--flash)}
+.acap{
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif;
+  font-size:12px; color:var(--muted); line-height:1.4; margin-bottom:1px;
+}
+.at{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif; font-size:14.5px}
+.pn{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif; font-size:14px; color:var(--muted)}
+.p{margin:0; text-indent:0}
+.p+.p{margin-top:2px}
+.pcap{font-size:12px; color:var(--muted); font-family:sans-serif}
+.pre-p{
+  font-family:"Hiragino Mincho ProN","Yu Mincho",serif; font-size:15.5px; line-height:2.1;
+  margin:0 0 14px;
+}
+.item{display:flex; gap:.6em; margin:1px 0 1px 1.4em}
+.item .ino{flex:0 0 auto; color:var(--muted)}
+.item .ibody{flex:1; min-width:0}
+.gen{margin:2px 0 2px 1.4em}
+.twrap{margin:10px 0 10px 1.4em; overflow-x:auto}
+.ttitle{font-size:12.5px; color:var(--muted); margin-bottom:3px}
+.ltable{border-collapse:collapse; font-size:13.5px; line-height:1.7}
+.ltable td{border:1px solid var(--border); padding:5px 10px; vertical-align:top}
+ruby rt{font-size:8px; color:var(--muted)}
+
+/* ---------- overlays ---------- */
+#loading{
+  position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+  flex-direction:column; gap:14px; background:var(--bg); z-index:20; text-align:center;
+}
+#loading.show{display:flex}
+.spinner{
+  width:34px; height:34px; border:3.5px solid var(--border); border-top-color:var(--accent);
+  border-radius:50%; animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loadmsg{font-size:13px; color:var(--muted); line-height:1.8}
+#loadmsg button{
+  margin-top:8px; padding:6px 18px; border:1px solid var(--accent); border-radius:7px;
+  background:var(--accent); color:#fff; cursor:pointer; font-size:13px;
+}
+#toast{
+  position:fixed; right:18px; bottom:18px; z-index:100; display:none;
+  background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--accent);
+  border-radius:9px; box-shadow:var(--shadow); padding:11px 16px; font-size:13px; max-width:340px; line-height:1.6;
+}
+#menubtn{display:none}
+@media (max-width:800px){
+  #menubtn{
+    display:block; border:1px solid var(--border); background:transparent;
+    border-radius:7px; padding:5px 10px; font-size:14px; cursor:pointer;
+  }
+  #sidebar{
+    position:fixed; z-index:40; top:0; bottom:0; left:0; width:82vw; max-width:320px;
+    transform:translateX(-105%); transition:transform .2s; box-shadow:var(--shadow);
+  }
+  #sidebar.show{transform:none}
+  #q{width:150px}
+  #page{padding:16px 16px 55vh}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <button id="menubtn" title="目次">☰</button>
+  <div id="brand">⚖️ 六法ビューア<small>e-Gov 法令API・最新版</small></div>
+  <nav id="tabs"></nav>
+  <div id="searchwrap">
+    <input id="q" type="text" placeholder="条数ジャンプ / 検索（例: 709, 398の22, 詐欺）" autocomplete="off">
+    <div id="hits"></div>
+  </div>
+</header>
+
+<div id="mapbar" title=""></div>
+
+<div id="main">
+  <aside id="sidebar"></aside>
+  <div id="right">
+    <div id="crumbs"></div>
+    <div id="content">
+      <div id="page"></div>
+      <div id="loading"><div class="spinner"></div><div id="loadmsg"></div></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ================= 設定 ================= */
+const API = 'https://laws.e-gov.go.jp/api/2';
+const CACHE_NAME = 'roppo-v1';
+const LAWS = [
+  {key:'kenpo', id:'321CONSTITUTION',  tab:'憲法', full:'日本国憲法'},
+  {key:'minpo', id:'129AC0000000089',  tab:'民法', full:'民法'},
+  {key:'shoho', id:'132AC0000000048',  tab:'商法', full:'商法'},
+  {key:'keiho', id:'140AC0000000045',  tab:'刑法', full:'刑法'},
+  {key:'minso', id:'408AC0000000109',  tab:'民訴', full:'民事訴訟法'},
+  {key:'keiso', id:'323AC0000000131',  tab:'刑訴', full:'刑事訴訟法'},
+];
+const STRUCT = {Part:'編', Chapter:'章', Section:'節', Subsection:'款', Division:'目'};
+const SEG_HUES = [215, 25, 150, 275, 348, 95, 190, 250, 45, 130, 310, 70];
+
+/* ================= 状態 ================= */
+const mem = {};          // key -> parsed
+let S = null;            // 現在表示中の parsed
+let curLawKey = null;
+let tops = null;         // spies の offsetTop キャッシュ
+let curSpyIdx = -1;
+const $ = id => document.getElementById(id);
+const content = $('content'), page = $('page');
+
+/* ================= 汎用 ================= */
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const toFull = s => String(s).replace(/\d/g, d => '０１２３４５６７８９'[d]);
+const findChild = (n, tag) => (n && n.children || []).find(c => typeof c === 'object' && c.tag === tag);
+const childrenTagged = (n, tag) => (n && n.children || []).filter(c => typeof c === 'object' && c.tag === tag);
+const dispNum = num => num.includes(':')
+  ? num.split(':').map(x => x.replace(/_/g,'の')).join('〜')
+  : num.replace(/_/g,'の');
+const numKey = num => num.split('_').map(Number);
+function cmpKey(a, b){
+  for (let i = 0; i < Math.max(a.length, b.length); i++){
+    const d = (a[i]||0) - (b[i]||0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+function textOf(n){                 // インライン HTML（ルビ対応・エスケープ済）
+  if (typeof n === 'string') return esc(n);
+  if (!n || !n.children) return '';
+  if (n.tag === 'Ruby'){
+    let base = '', rt = '';
+    for (const c of n.children){
+      if (typeof c === 'string') base += esc(c);
+      else if (c.tag === 'Rt') rt += textOf(c);
+      else base += textOf(c);
+    }
+    return rt ? `<ruby>${base}<rt>${rt}</rt></ruby>` : base;
+  }
+  let out = '';
+  for (const c of n.children) out += textOf(c);
+  return out;
+}
+function plainOf(n){                // プレーンテキスト（未エスケープ）
+  if (typeof n === 'string') return n;
+  if (!n || !n.children) return '';
+  if (n.tag === 'Rt') return '';
+  let out = '';
+  for (const c of n.children) out += plainOf(c);
+  return out;
+}
+function flowHtml(node){            // ParagraphSentence / ItemSentence / TableColumn 等
+  let out = '';
+  for (const c of (node && node.children || [])){
+    if (typeof c === 'string'){ out += esc(c); continue; }
+    if (c.tag === 'Column'){ if (out) out += '　'; out += flowHtml(c); }
+    else out += textOf(c);
+  }
+  return out;
+}
+
+/* ================= パース & レンダリング ================= */
+function parseLaw(json, law){
+  const ft = json.law_full_text;
+  const lawBody = findChild(ft, 'LawBody');
+  const main = findChild(lawBody, 'MainProvision');
+  const P = {
+    law, html: [], nodes: new Map(), arts: [], spies: [], nid: 0,
+    root: {id:'root', tag:'Root', title:'', parent:null, children:[], artStart:0, artCount:0},
+    lawTitle: plainOf(findChild(lawBody, 'LawTitle')),
+    lawNum: plainOf(findChild(ft, 'LawNum')),
+    rev: json.revision_info || {}, info: json.law_info || {},
+  };
+  P.nodes.set('root', P.root);
+
+  const newNode = (parent, tag, title) => {
+    const node = {
+      id: 'n' + (P.nid++), tag, title, parent, children: [],
+      artStart: P.arts.length, artCount: 0,
+    };
+    P.nodes.set(node.id, node);
+    parent.children.push(node);
+    return node;
+  };
+
+  function tableHtml(ts){
+    const tbl = findChild(ts, 'Table');
+    let rows = '';
+    for (const r of childrenTagged(tbl, 'TableRow')){
+      let cells = '';
+      for (const col of childrenTagged(r, 'TableColumn')){
+        const at = col.attr || {};
+        const span = (at.rowspan ? ` rowspan="${+at.rowspan}"` : '') + (at.colspan ? ` colspan="${+at.colspan}"` : '');
+        cells += `<td${span}>${flowHtml(col)}</td>`;
+      }
+      rows += `<tr>${cells}</tr>`;
+    }
+    const tt = findChild(ts, 'TableStructTitle');
+    return `<div class="twrap">${tt ? `<div class="ttitle">${esc(plainOf(tt))}</div>` : ''}<table class="ltable">${rows}</table></div>`;
+  }
+
+  function itemHtml(it){            // Item / Subitem1 / Subitem2
+    const base = it.tag;
+    let no = '', tx = '', sub = '';
+    for (const c of it.children || []){
+      if (typeof c === 'string') continue;
+      if (c.tag === base + 'Title') no = plainOf(c);
+      else if (c.tag === base + 'Sentence') tx = flowHtml(c);
+      else if (/^Subitem\d$/.test(c.tag)) sub += itemHtml(c);
+      else if (c.tag === 'TableStruct') sub += tableHtml(c);
+      else sub += `<div class="gen">${textOf(c)}</div>`;
+    }
+    return `<div class="item"><span class="ino">${esc(no)}</span><div class="ibody"><span>${tx}</span>${sub}</div></div>`;
+  }
+
+  function paragraphHtml(p, lead){  // lead = 条名（第1項のみ）
+    let out = '', sent = '', blocks = '';
+    const pnNode = findChild(p, 'ParagraphNum');
+    let numTxt = pnNode ? plainOf(pnNode) : '';
+    if (!numTxt && !lead){
+      const n = p.attr && p.attr.Num;
+      if (n && n !== '1') numTxt = toFull(n);
+    }
+    const cap = findChild(p, 'ParagraphCaption');
+    if (cap) out += `<div class="pcap">${esc(plainOf(cap))}</div>`;
+    for (const c of p.children || []){
+      if (typeof c === 'string') continue;
+      switch (c.tag){
+        case 'ParagraphCaption': case 'ParagraphNum': break;
+        case 'ParagraphSentence': sent = flowHtml(c); break;
+        case 'Item': blocks += itemHtml(c); break;
+        case 'TableStruct': blocks += tableHtml(c); break;
+        default: blocks += `<div class="gen">${textOf(c)}</div>`;
+      }
+    }
+    const head = lead ? `<b class="at">${esc(lead)}</b>` : (numTxt ? `<b class="pn">${esc(numTxt)}</b>` : '');
+    out += `<p class="p">${head}${head ? '　' : ''}${sent}</p>${blocks}`;
+    return out;
+  }
+
+  function renderArticle(a, path){
+    const ord = P.arts.length, domId = 'a' + ord;
+    const num = (a.attr && a.attr.Num) || String(ord);
+    const title = plainOf(findChild(a, 'ArticleTitle'));
+    const capNode = findChild(a, 'ArticleCaption');
+    const caption = capNode ? plainOf(capNode) : '';
+    let inner = '', plain = '', first = true;
+    for (const c of a.children || []){
+      if (typeof c === 'string' || c.tag !== 'Paragraph') continue;
+      inner += paragraphHtml(c, first ? title : null);
+      plain += plainOf(c) + ' ';
+      first = false;
+    }
+    plain += caption;  // 本文優先でヒットさせ、見出しは末尾（スニペット二重表示防止）
+    P.html.push(`<article class="art" id="${domId}">${caption ? `<div class="acap">${esc(caption)}</div>` : ''}${inner}</article>`);
+    P.arts.push({ord, num, disp: dispNum(num), title, caption, path, plain});
+    P.spies.push({dom: domId, path, art: ord, label: title + (caption ? '　' + caption : '')});
+  }
+
+  function walk(container, parent, path){
+    for (const c of container.children || []){
+      if (typeof c === 'string') continue;
+      if (STRUCT[c.tag]){
+        const title = plainOf(findChild(c, c.tag + 'Title')).replace(/\s+/g, '　').trim() || c.tag;
+        const node = newNode(parent, c.tag, title);
+        const npath = path.concat(node.id);
+        P.html.push(`<div class="shead sh-${c.tag}" id="${node.id}">${esc(title)}</div>`);
+        P.spies.push({dom: node.id, path: npath, art: P.arts.length, label: null});
+        walk(c, node, npath);
+        node.artCount = P.arts.length - node.artStart;
+      }
+      else if (c.tag === 'Article') renderArticle(c, path);
+      else if (c.tag === 'Paragraph') P.html.push(`<div class="art">${paragraphHtml(c, null)}</div>`);
+    }
+  }
+
+  // 制定文
+  for (const e of childrenTagged(lawBody, 'EnactStatement'))
+    P.html.push(`<p class="enact">${textOf(e)}</p>`);
+  // 前文（憲法）
+  const pre = findChild(lawBody, 'Preamble');
+  if (pre){
+    const node = newNode(P.root, 'Preamble', '前文');
+    P.html.push(`<div class="shead sh-Preamble" id="${node.id}">前文</div>`);
+    P.spies.push({dom: node.id, path: [node.id], art: 0, label: null});
+    for (const c of childrenTagged(pre, 'Paragraph'))
+      P.html.push(`<p class="pre-p">${flowHtml(findChild(c, 'ParagraphSentence'))}</p>`);
+  }
+  walk(main, P.root, []);
+  P.root.artCount = P.arts.length;
+  return P;
+}
+
+function nodeRange(node){
+  if (!node.artCount) return '';
+  const a = S.arts[node.artStart], b = S.arts[node.artStart + node.artCount - 1];
+  const first = a.num.includes(':') ? dispNum(a.num.split(':')[0]) : a.disp;
+  const last  = b.num.includes(':') ? dispNum(b.num.split(':')[1]) : b.disp;
+  return first === last ? first : `${first}–${last}`;
+}
+
+/* ================= 表示の組み立て ================= */
+function metaHtml(){
+  const r = S.rev, parts = [];
+  parts.push(`<b>${esc(S.lawTitle)}</b>（${esc(S.lawNum)}）`);
+  if (r.amendment_law_num)
+    parts.push(`${esc(r.amendment_law_num)}〔${esc(r.amendment_law_title || '')}〕による改正まで反映（${esc(r.amendment_enforcement_date || '')} 施行）`);
+  else if (S.info.promulgation_date)
+    parts.push(`公布 ${esc(S.info.promulgation_date)}`);
+  parts.push('出典: e-Gov 法令API｜本則のみ（附則は省略）');
+  return `<div class="lawmeta">${parts.join('<br>')}</div>`;
+}
+
+function applyParsed(parsed){
+  S = parsed;
+  page.innerHTML = metaHtml() + S.html.join('');
+  buildToc();
+  buildMap();
+  tops = null;
+  curSpyIdx = -1;
+  $('hits').style.display = 'none';
+}
+
+function buildToc(){
+  const sb = $('sidebar');
+  function rec(node, depth){
+    const kids = node.children.map(k => rec(k, depth + 1)).join('');
+    const range = nodeRange(node);
+    return `<div class="tnode${depth === 0 ? ' open' : ''}" data-id="${node.id}">
+      <div class="trow" style="padding-left:${4 + depth * 3}px" data-id="${node.id}">
+        <span class="tcaret${kids ? '' : ' leaf'}">▶</span>
+        <span class="ttl">${esc(node.title)}</span>
+        ${range ? `<span class="trange">${esc(range)}</span>` : ''}
+      </div>
+      ${kids ? `<div class="tkids">${kids}</div>` : ''}
+    </div>`;
+  }
+  sb.innerHTML = S.root.children.map(n => rec(n, 0)).join('');
+}
+
+function buildMap(){
+  const bar = $('mapbar');
+  const segs = S.root.children.filter(n => n.artCount > 0);
+  const total = S.arts.length || 1;
+  let html = '';
+  segs.forEach((n, i) => {
+    const hue = SEG_HUES[i % SEG_HUES.length];
+    const short = n.title.includes('　') ? n.title.split('　').slice(1).join('　') : n.title;
+    html += `<div class="seg" data-id="${n.id}" style="flex-grow:${n.artCount};background:color-mix(in oklab, hsl(${hue} 65% 55%) 22%, var(--panel))" title="${esc(n.title)}（${esc(nodeRange(n))}条）"><span>${esc(short)}</span></div>`;
+  });
+  bar.innerHTML = html + '<div id="mapmark"></div>';
+}
+
+/* ================= スクロール連動 ================= */
+let topsSH = -1;   // tops 計算時点の scrollHeight（レイアウト変化検知用）
+function computeTops(){
+  const base = content.getBoundingClientRect().top;
+  const st = content.scrollTop;
+  tops = S.spies.map(sp => {
+    const el = document.getElementById(sp.dom);
+    return el ? el.getBoundingClientRect().top - base + st : 0;
+  });
+  topsSH = content.scrollHeight;
+}
+function revalidate(){
+  // 折返し変化（ウィンドウ幅・フォント等）を検知したら、直前に読んでいた位置へ再アンカー
+  if (!S) return;
+  if (!tops || content.scrollHeight !== topsSH){
+    const keep = curSpyIdx;
+    computeTops();
+    if (keep >= 0 && tops[keep] !== undefined){
+      content.scrollTop = Math.max(0, tops[keep] - 8);
+      updateToc(S.spies[keep]);   // 新レイアウトで目次スクロールも追従
+    }
+  }
+}
+
+function currentSpyIndex(){
+  if (!S || !S.spies.length) return -1;
+  if (!tops) computeTops();
+  const y = content.scrollTop + 40;
+  let lo = 0, hi = tops.length - 1, ans = 0;
+  while (lo <= hi){
+    const mid = (lo + hi) >> 1;
+    if (tops[mid] <= y){ ans = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  return ans;
+}
+
+function onScroll(){
+  revalidate();
+  const idx = currentSpyIndex();
+  if (idx !== curSpyIdx && idx >= 0){
+    curSpyIdx = idx;
+    const sp = S.spies[idx];
+    updateCrumbs(sp);
+    updateToc(sp);
+    updateMap(sp);
+  }
+  saveScrollSoon();
+}
+
+function updateCrumbs(sp){
+  const law = LAWS.find(l => l.key === curLawKey);
+  let html = `<span class="lawname">${esc(law.full)}</span>`;
+  for (const id of sp.path){
+    const n = S.nodes.get(id);
+    html += `<span class="sep">›</span><span class="cr" data-id="${id}" title="${esc(n.title)}">${esc(n.title)}</span>`;
+  }
+  if (sp.label)
+    html += `<span class="sep">›</span><span class="cra">${esc(sp.label)}</span>`;
+  $('crumbs').innerHTML = html;
+}
+
+function updateToc(sp){
+  const sb = $('sidebar');
+  sb.querySelectorAll('.trow.cur').forEach(el => el.classList.remove('cur'));
+  if (!sp.path.length) return;
+  for (const id of sp.path){
+    const tn = sb.querySelector(`.tnode[data-id="${id}"]`);
+    if (tn) tn.classList.add('open');
+  }
+  const deepest = sp.path[sp.path.length - 1];
+  const row = sb.querySelector(`.trow[data-id="${deepest}"]`);
+  if (row){
+    row.classList.add('cur');
+    // scrollIntoView は環境により無反応のため手動スクロール
+    const rr = row.getBoundingClientRect(), sr = sb.getBoundingClientRect();
+    if (rr.top < sr.top + 8 || rr.bottom > sr.bottom - 8)
+      sb.scrollTop += rr.top - sr.top - sr.height / 3;
+  }
+}
+
+function updateMap(sp){
+  const mark = $('mapmark');
+  if (!mark || !S.arts.length) return;
+  const pct = Math.min(99.8, (sp.art + 0.5) / S.arts.length * 100);
+  mark.style.left = pct + '%';
+  const top = sp.path[0];
+  document.querySelectorAll('#mapbar .seg').forEach(el =>
+    el.classList.toggle('on', el.dataset.id === top));
+}
+
+/* ================= ナビゲーション ================= */
+function scrollToDom(domId, flash){
+  computeTops();   // レイアウトは幅変更等でずれるため毎回再計算（ジャンプは低頻度）
+  const i = S.spies.findIndex(sp => sp.dom === domId);
+  const el = document.getElementById(domId);
+  if (!el) return;
+  const top = (i >= 0 ? tops[i] : el.offsetTop) - 8;
+  // 常に瞬間移動（smooth はフレーム駆動のため環境により無反応・巨大文書にも不向き）
+  content.scrollTop = Math.max(0, top);
+  onScroll();
+  if (flash){
+    el.classList.add('flash');
+    setTimeout(() => el.classList.remove('flash'), 1600);
+  }
+}
+
+function findArt(q){                // q: '709' or '709_2'
+  const qk = numKey(q);
+  for (const a of S.arts) if (a.num === q) return a;
+  for (const a of S.arts){
+    if (a.num.includes(':')){
+      const [s, e] = a.num.split(':');
+      if (cmpKey(numKey(s), qk) <= 0 && cmpKey(qk, numKey(e)) <= 0) return a;
+    }
+  }
+  return null;
+}
+
+function tryJump(raw){
+  const t = raw.replace(/[０-９]/g, d => '０１２３４５６７８９'.indexOf(d))
+               .replace(/^第/, '').replace(/条/g, '').replace(/[-‐]/g, 'の').trim();
+  if (!/^\d+(の\d+)*$/.test(t)) return false;
+  const a = findArt(t.replace(/の/g, '_'));
+  if (a){
+    scrollToDom('a' + a.ord, true);
+    history.replaceState(null, '', '#' + curLawKey + '/' + a.disp);
+    return true;
+  }
+  toast(`第${t}条 は ${LAWS.find(l => l.key === curLawKey).full} に見つかりません`);
+  return true;
+}
+
+function doSearch(q){
+  const box = $('hits');
+  const hits = [];
+  for (const a of S.arts){
+    const idx = a.plain.indexOf(q);
+    if (idx >= 0){ hits.push({a, idx}); if (hits.length >= 100) break; }
+  }
+  if (!hits.length){
+    box.innerHTML = `<div class="none">「${esc(q)}」は本文中に見つかりません</div>`;
+  } else {
+    box.innerHTML = hits.map(({a, idx}) => {
+      const s = Math.max(0, idx - 22);
+      const snip = esc(a.plain.slice(s, idx)) + '<mark>' + esc(q) + '</mark>' +
+                   esc(a.plain.slice(idx + q.length, idx + q.length + 42));
+      return `<div class="hit" data-ord="${a.ord}"><b>${esc(a.title)}</b> <span style="color:var(--muted)">${esc(a.caption)}</span><div class="snip">${s > 0 ? '…' : ''}${snip}…</div></div>`;
+    }).join('');
+  }
+  box.style.display = 'block';
+}
+
+/* ================= 読書位置の保存/復元（ピクセルでなくスパイ番号で保持） ================= */
+let saveTimer = null;
+function saveScrollSoon(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    // 法令切替をまたいだ誤保存を防ぐ: 表示中データと curLawKey が一致する時だけ
+    if (S && S.law.key === curLawKey && curSpyIdx >= 0)
+      localStorage.setItem('roppo.pos.' + curLawKey, String(curSpyIdx));
+  }, 350);
+}
+function flushPos(){                 // 切替直前に旧法令の位置を確定保存
+  clearTimeout(saveTimer);
+  if (S && S.law.key === curLawKey && curSpyIdx >= 0)
+    localStorage.setItem('roppo.pos.' + curLawKey, String(curSpyIdx));
+}
+function restorePos(key){
+  const i = +(localStorage.getItem('roppo.pos.' + key) || 0);
+  if (S && S.spies[i]){
+    if (!tops) computeTops();
+    content.scrollTop = Math.max(0, tops[i] - 8);
+  } else content.scrollTop = 0;
+}
+
+/* ================= データ取得 ================= */
+async function cacheMatch(url){
+  if (!('caches' in window)) return null;
+  try{
+    const c = await caches.open(CACHE_NAME);
+    const r = await c.match(url);
+    return r ? r.json() : null;
+  }catch(e){ return null; }
+}
+async function fetchJson(url, store){
+  const r = await fetch(url, {headers: {Accept: 'application/json'}});
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  if (store && 'caches' in window){
+    try{ const c = await caches.open(CACHE_NAME); await c.put(url, r.clone()); }catch(e){}
+  }
+  return r.json();
+}
+
+async function loadLaw(law){
+  const url = API + '/law_data/' + law.id;
+  let json = await cacheMatch(url);
+  const fromCache = !!json;
+  if (!json) json = await fetchJson(url, true);
+  const parsed = parseLaw(json, law);
+  mem[law.key] = parsed;
+  if (fromCache) checkUpdate(law, url);
+  return parsed;
+}
+
+async function checkUpdate(law, url){
+  try{
+    const d = await fetchJson(API + '/laws?law_id=' + law.id, false);
+    const latest = d.laws && d.laws[0] && d.laws[0].current_revision_info;
+    if (!latest) return;
+    if (latest.law_revision_id !== mem[law.key].rev.law_revision_id){
+      const fresh = await fetchJson(url, true);
+      const parsed = parseLaw(fresh, law);
+      mem[law.key] = parsed;
+      if (curLawKey === law.key){
+        const pos = content.scrollTop;
+        applyParsed(parsed);
+        content.scrollTop = pos;
+        onScroll();
+      }
+      toast(`📖 ${law.full}: ${latest.amendment_law_num || '新しい改正'} を反映した最新版に更新しました`);
+    }
+  }catch(e){ /* オフライン時などは無視 */ }
+}
+
+/* ================= 法令切替 ================= */
+async function openLaw(key, jumpTo){
+  if (curLawKey === key && S){ if (jumpTo) tryJump(jumpTo); return; }
+  const law = LAWS.find(l => l.key === key);
+  if (!law) return;
+  flushPos();
+  curLawKey = key;
+  localStorage.setItem('roppo.law', key);
+  document.querySelectorAll('#tabs button').forEach(b =>
+    b.classList.toggle('on', b.dataset.key === key));
+  $('sidebar').classList.remove('show');
+
+  if (!mem[key]){
+    $('loading').classList.add('show');
+    $('loadmsg').innerHTML = `${esc(law.full)} を e-Gov 法令APIから取得中…<br>（初回のみ・以後はキャッシュから即表示）`;
+    try{
+      await loadLaw(law);
+    }catch(e){
+      $('loadmsg').innerHTML = `取得に失敗しました（${esc(e.message)}）。<br>ネット接続を確認してください。<br><button onclick="retryLoad()">再試行</button>`;
+      return;
+    }
+    $('loading').classList.remove('show');
+  }
+  if (curLawKey !== key) return;   // 取得中に別タブへ移った
+  applyParsed(mem[key]);
+  setTimeout(() => {               // レイアウト確定後（rAF は非表示タブで発火しないため不使用）
+    computeTops();
+    if (jumpTo){ tryJump(jumpTo); }
+    else restorePos(key);
+    curSpyIdx = -1;
+    onScroll();
+  }, 0);
+}
+function retryLoad(){ const k = curLawKey; curLawKey = null; openLaw(k); }
+
+/* ================= UI 部品 ================= */
+let toastTimer = null;
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.style.display = 'none', 6000);
+}
+
+/* ================= イベント ================= */
+$('tabs').innerHTML = LAWS.map(l =>
+  `<button data-key="${l.key}" title="${esc(l.full)}">${esc(l.tab)}</button>`).join('');
+$('tabs').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b) openLaw(b.dataset.key);
+});
+content.addEventListener('scroll', onScroll, {passive: true});
+// scroll イベントが来ない環境（非表示タブ等）向けの保険
+let lastPolled = -1;
+setInterval(() => {
+  if (S && content.scrollTop !== lastPolled){
+    lastPolled = content.scrollTop;
+    onScroll();
+  }
+}, 300);
+window.addEventListener('resize', () => { tops = null; onScroll(); });
+if (document.fonts && document.fonts.ready)
+  document.fonts.ready.then(() => { tops = null; onScroll(); });
+
+$('sidebar').addEventListener('click', e => {
+  const caret = e.target.closest('.tcaret');
+  if (caret && !caret.classList.contains('leaf')){
+    caret.closest('.tnode').classList.toggle('open');
+    e.stopPropagation();
+    return;
+  }
+  const row = e.target.closest('.trow');
+  if (row){
+    scrollToDom(row.dataset.id);
+    $('sidebar').classList.remove('show');
+  }
+});
+$('crumbs').addEventListener('click', e => {
+  const cr = e.target.closest('.cr');
+  if (cr) scrollToDom(cr.dataset.id);
+});
+$('mapbar').addEventListener('click', e => {
+  const seg = e.target.closest('.seg');
+  if (seg) scrollToDom(seg.dataset.id);
+});
+$('hits').addEventListener('click', e => {
+  const h = e.target.closest('.hit');
+  if (h){
+    scrollToDom('a' + h.dataset.ord, true);
+    $('hits').style.display = 'none';
+  }
+});
+$('q').addEventListener('keydown', e => {
+  if (e.key === 'Enter'){
+    const v = e.target.value.trim();
+    if (!v) return;
+    if (!tryJump(v)) doSearch(v);
+    else $('hits').style.display = 'none';
+  }
+  if (e.key === 'Escape'){ $('hits').style.display = 'none'; e.target.blur(); }
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('#searchwrap')) $('hits').style.display = 'none';
+});
+document.addEventListener('keydown', e => {
+  if (e.key === '/' && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)){
+    e.preventDefault();
+    $('q').focus();
+    $('q').select();
+  }
+});
+$('menubtn').addEventListener('click', () => $('sidebar').classList.toggle('show'));
+
+/* ================= 起動 ================= */
+(function boot(){
+  let key = localStorage.getItem('roppo.law') || 'minpo';
+  let jumpTo = null;
+  const m = location.hash.match(/^#([a-z]+)\/(.+)$/);
+  if (m && LAWS.some(l => l.key === m[1])){ key = m[1]; jumpTo = decodeURIComponent(m[2]); }
+  openLaw(key, jumpTo);
+})();
+</script>
+</body>
+</html>
