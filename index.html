@@ -298,6 +298,8 @@ const SUBLAWS = [
   {key:'shakuchi', id:'403AC0000000090', full:'借地借家法',     cat:'民事系'},
   {key:'shohi',    id:'412AC0000000061', full:'消費者契約法',   cat:'民事系'},
   {key:'pl',       id:'406AC0000000085', full:'製造物責任法',   cat:'民事系'},
+  {key:'ippan',    id:'418AC0000000048', full:'一般法人法',     cat:'民事系'},
+  {key:'joto',     id:'507AC0000000056', full:'譲渡担保法',     cat:'民事系'},
   {key:'tegata',   id:'307AC0000000020', full:'手形法',         cat:'商事系'},
   {key:'kogitte',  id:'308AC0000000057', full:'小切手法',       cat:'商事系'},
   {key:'shonen',   id:'323AC0000000168', full:'少年法',         cat:'刑事系'},
@@ -516,6 +518,8 @@ function nodeRange(node){
 function metaHtml(){
   const r = S.rev, parts = [];
   parts.push(`<b>${esc(S.lawTitle)}</b>（${esc(S.lawNum)}）`);
+  if (S.unenforced)
+    parts.push(`<b style="color:#e11d48">⚠️ この法律は未施行です（施行予定: ${esc(S.unenforced)}）</b> — 公布済み・施行予定版の条文を表示しています`);
   if (r.amendment_law_num)
     parts.push(`${esc(r.amendment_law_num)}〔${esc(r.amendment_law_title || '')}〕による改正まで反映（${esc(r.amendment_enforcement_date || '')} 施行）`);
   else if (S.info.promulgation_date)
@@ -757,12 +761,56 @@ async function fetchJson(url, store){
   return r.json();
 }
 
+async function buildParsed(law, json){
+  let parsed = parseLaw(json, law);
+  parsed.baseRevId = (json.revision_info || {}).law_revision_id;
+  if (!parsed.arts.length){
+    // 本則が空 = 公布済み・未施行の新法（例: 譲渡担保法）→ 直近の未施行リビジョンを表示
+    const memoKey = 'roppo.unenf.' + law.key;
+    try{
+      const d = await fetchJson(API + '/law_revisions/' + law.id, false);
+      const next = (d.revisions || [])
+        .filter(r => r.current_revision_status === 'UnEnforced')
+        .sort((a, b) => String(a.amendment_enforcement_date).localeCompare(String(b.amendment_enforcement_date)))[0];
+      if (next){
+        const url2 = API + '/law_data/' + next.law_revision_id;
+        let j2 = await cacheMatch(url2);
+        if (!j2) j2 = await fetchJson(url2, true);
+        const p2 = parseLaw(j2, law);
+        if (p2.arts.length){
+          p2.baseRevId = parsed.baseRevId;
+          p2.unenforced = next.amendment_enforcement_date || '';
+          localStorage.setItem(memoKey, JSON.stringify({rid: next.law_revision_id, date: p2.unenforced}));
+          parsed = p2;
+        }
+      }
+    }catch(e){
+      // オフライン等 → 前回の未施行リビジョンのキャッシュを試す
+      try{
+        const memo = JSON.parse(localStorage.getItem(memoKey) || 'null');
+        if (memo){
+          const j2 = await cacheMatch(API + '/law_data/' + memo.rid);
+          if (j2){
+            const p2 = parseLaw(j2, law);
+            if (p2.arts.length){
+              p2.baseRevId = parsed.baseRevId;
+              p2.unenforced = memo.date;
+              parsed = p2;
+            }
+          }
+        }
+      }catch(e2){}
+    }
+  }
+  return parsed;
+}
+
 async function loadLaw(law){
   const url = API + '/law_data/' + law.id;
   let json = await cacheMatch(url);
   const fromCache = !!json;
   if (!json) json = await fetchJson(url, true);
-  const parsed = parseLaw(json, law);
+  const parsed = await buildParsed(law, json);
   mem[law.key] = parsed;
   if (fromCache) checkUpdate(law, url);
   return parsed;
@@ -773,9 +821,9 @@ async function checkUpdate(law, url){
     const d = await fetchJson(API + '/laws?law_id=' + law.id, false);
     const latest = d.laws && d.laws[0] && d.laws[0].current_revision_info;
     if (!latest) return;
-    if (latest.law_revision_id !== mem[law.key].rev.law_revision_id){
+    if (latest.law_revision_id !== mem[law.key].baseRevId){
       const fresh = await fetchJson(url, true);
-      const parsed = parseLaw(fresh, law);
+      const parsed = await buildParsed(law, fresh);
       mem[law.key] = parsed;
       if (curLawKey === law.key){
         const pos = content.scrollTop;
