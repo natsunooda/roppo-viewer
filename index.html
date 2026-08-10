@@ -56,6 +56,29 @@ header{
 }
 #tabs button:hover{background:var(--accent-weak)}
 #tabs button.on{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600}
+#subwrap{position:relative}
+#subbtn{
+  border:1px dashed var(--border); background:transparent; border-radius:7px;
+  padding:5px 11px; font-size:13px; cursor:pointer; line-height:1; color:var(--muted);
+}
+#subbtn:hover{background:var(--accent-weak)}
+#subbtn.on{background:var(--accent); border:1px solid var(--accent); color:#fff; font-weight:600}
+#subpanel{
+  display:none; position:absolute; left:0; top:calc(100% + 6px); z-index:60;
+  min-width:230px; max-height:70vh; overflow:auto; padding:4px 0 8px;
+  background:var(--panel); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow);
+}
+#subpanel.show{display:block}
+#subpanel .sphead{
+  padding:9px 14px 3px; font-size:10.5px; font-weight:700; color:var(--muted);
+  letter-spacing:.12em;
+}
+#subpanel .sprow{
+  display:block; width:100%; text-align:left; border:none; background:transparent;
+  padding:6px 14px 6px 20px; font-size:13.5px; cursor:pointer;
+}
+#subpanel .sprow:hover{background:var(--accent-weak)}
+#subpanel .sprow.on{background:var(--accent-weak); font-weight:700; box-shadow:inset 2.5px 0 0 var(--accent)}
 #searchwrap{margin-left:auto; position:relative}
 #q{
   width:260px; max-width:40vw; padding:6px 10px; font-size:13px;
@@ -226,6 +249,10 @@ ruby rt{font-size:8px; color:var(--muted)}
   <button id="menubtn" title="目次">☰</button>
   <div id="brand">⚖️ 六法ビューア<small>e-Gov 法令API・最新版</small></div>
   <nav id="tabs"></nav>
+  <div id="subwrap">
+    <button id="subbtn">関連法 ▾</button>
+    <div id="subpanel"></div>
+  </div>
   <div id="searchwrap">
     <input id="q" type="text" placeholder="条数ジャンプ / 検索（例: 709, 398の22, 詐欺）" autocomplete="off">
     <div id="hits"></div>
@@ -261,6 +288,27 @@ const LAWS = [
   {key:'minso', id:'408AC0000000109',  tab:'民訴', full:'民事訴訟法'},
   {key:'keiso', id:'323AC0000000131',  tab:'刑訴', full:'刑事訴訟法'},
 ];
+// サブ表示の関連法（「関連法 ▾」から開く。機能はメインと同一）
+const SUBLAWS = [
+  {key:'jinso',    id:'415AC0000000109', full:'人事訴訟法',     cat:'民事系'},
+  {key:'kaji',     id:'423AC0000000052', full:'家事事件手続法', cat:'民事系'},
+  {key:'shikko',   id:'354AC0000000004', full:'民事執行法',     cat:'民事系'},
+  {key:'hozen',    id:'401AC0000000091', full:'民事保全法',     cat:'民事系'},
+  {key:'hasan',    id:'416AC0000000075', full:'破産法',         cat:'民事系'},
+  {key:'shakuchi', id:'403AC0000000090', full:'借地借家法',     cat:'民事系'},
+  {key:'shohi',    id:'412AC0000000061', full:'消費者契約法',   cat:'民事系'},
+  {key:'pl',       id:'406AC0000000085', full:'製造物責任法',   cat:'民事系'},
+  {key:'tegata',   id:'307AC0000000020', full:'手形法',         cat:'商事系'},
+  {key:'kogitte',  id:'308AC0000000057', full:'小切手法',       cat:'商事系'},
+  {key:'shonen',   id:'323AC0000000168', full:'少年法',         cat:'刑事系'},
+  {key:'gyoso',    id:'337AC0000000139', full:'行政事件訴訟法', cat:'公法系'},
+  {key:'gyote',    id:'405AC0000000088', full:'行政手続法',     cat:'公法系'},
+  {key:'gyofuku',  id:'426AC0000000068', full:'行政不服審査法', cat:'公法系'},
+  {key:'kokubai',  id:'322AC0000000125', full:'国家賠償法',     cat:'公法系'},
+  {key:'roki',     id:'322AC0000000049', full:'労働基準法',     cat:'労働法'},
+  {key:'rokei',    id:'419AC0000000128', full:'労働契約法',     cat:'労働法'},
+];
+const ALL_LAWS = LAWS.concat(SUBLAWS);
 const STRUCT = {Part:'編', Chapter:'章', Section:'節', Subsection:'款', Division:'目'};
 const SEG_HUES = [215, 25, 150, 275, 348, 95, 190, 250, 45, 130, 310, 70];
 
@@ -566,7 +614,7 @@ function onScroll(){
 }
 
 function updateCrumbs(sp){
-  const law = LAWS.find(l => l.key === curLawKey);
+  const law = ALL_LAWS.find(l => l.key === curLawKey);
   let html = `<span class="lawname">${esc(law.full)}</span>`;
   for (const id of sp.path){
     const n = S.nodes.get(id);
@@ -644,7 +692,7 @@ function tryJump(raw){
     history.replaceState(null, '', '#' + curLawKey + '/' + a.disp);
     return true;
   }
-  toast(`第${t}条 は ${LAWS.find(l => l.key === curLawKey).full} に見つかりません`);
+  toast(`第${t}条 は ${ALL_LAWS.find(l => l.key === curLawKey).full} に見つかりません`);
   return true;
 }
 
@@ -743,13 +791,19 @@ async function checkUpdate(law, url){
 /* ================= 法令切替 ================= */
 async function openLaw(key, jumpTo){
   if (curLawKey === key && S){ if (jumpTo) tryJump(jumpTo); return; }
-  const law = LAWS.find(l => l.key === key);
+  const law = ALL_LAWS.find(l => l.key === key);
   if (!law) return;
   flushPos();
   curLawKey = key;
   localStorage.setItem('roppo.law', key);
   document.querySelectorAll('#tabs button').forEach(b =>
     b.classList.toggle('on', b.dataset.key === key));
+  const isSub = SUBLAWS.some(l => l.key === key);
+  $('subbtn').textContent = isSub ? law.full + ' ▾' : '関連法 ▾';
+  $('subbtn').classList.toggle('on', isSub);
+  document.querySelectorAll('#subpanel .sprow').forEach(b =>
+    b.classList.toggle('on', b.dataset.key === key));
+  $('subpanel').classList.remove('show');
   $('sidebar').classList.remove('show');
 
   if (!mem[key]){
@@ -855,7 +909,23 @@ document.addEventListener('keydown', e => {
 $('menubtn').addEventListener('click', () => $('sidebar').classList.toggle('show'));
 window.addEventListener('hashchange', () => {
   const m = location.hash.match(/^#([a-z]+)\/(.+)$/);
-  if (m && LAWS.some(l => l.key === m[1])) openLaw(m[1], decodeURIComponent(m[2]));
+  if (m && ALL_LAWS.some(l => l.key === m[1])) openLaw(m[1], decodeURIComponent(m[2]));
+});
+$('subpanel').innerHTML = [...new Set(SUBLAWS.map(l => l.cat))].map(cat =>
+  `<div class="sphead">${esc(cat)}</div>` +
+  SUBLAWS.filter(l => l.cat === cat).map(l =>
+    `<button class="sprow" data-key="${l.key}">${esc(l.full)}</button>`).join('')
+).join('');
+$('subbtn').addEventListener('click', e => {
+  e.stopPropagation();
+  $('subpanel').classList.toggle('show');
+});
+$('subpanel').addEventListener('click', e => {
+  const b = e.target.closest('.sprow');
+  if (b) openLaw(b.dataset.key);
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('#subwrap')) $('subpanel').classList.remove('show');
 });
 
 /* ================= 起動 ================= */
@@ -863,7 +933,7 @@ window.addEventListener('hashchange', () => {
   let key = localStorage.getItem('roppo.law') || 'minpo';
   let jumpTo = null;
   const m = location.hash.match(/^#([a-z]+)\/(.+)$/);
-  if (m && LAWS.some(l => l.key === m[1])){ key = m[1]; jumpTo = decodeURIComponent(m[2]); }
+  if (m && ALL_LAWS.some(l => l.key === m[1])){ key = m[1]; jumpTo = decodeURIComponent(m[2]); }
   openLaw(key, jumpTo);
 })();
 </script>
