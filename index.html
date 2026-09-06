@@ -908,15 +908,13 @@ if (document.fonts && document.fonts.ready)
   document.fonts.ready.then(() => { tops = null; onScroll(); });
 
 $('sidebar').addEventListener('click', e => {
-  const caret = e.target.closest('.tcaret');
-  if (caret && !caret.classList.contains('leaf')){
-    caret.closest('.tnode').classList.toggle('open');
-    e.stopPropagation();
-    return;
-  }
   const row = e.target.closest('.trow');
-  if (row){
-    scrollToDom(row.dataset.id);
+  if (!row) return;
+  const tnode = row.closest('.tnode');
+  if (tnode.querySelector(':scope > .tkids')){
+    tnode.classList.toggle('open');   // 下位目次のある行（編・章など）→ 展開/折りたたみ
+  } else {
+    scrollToDom(row.dataset.id);      // 末端の行 → 本文へジャンプ
     $('sidebar').classList.remove('show');
   }
 });
