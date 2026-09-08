@@ -228,7 +228,9 @@ ruby rt{font-size:8px; color:var(--muted)}
   border-radius:9px; box-shadow:var(--shadow); padding:11px 16px; font-size:13px; max-width:340px; line-height:1.6;
 }
 #menubtn{display:none}
+#backdrop{display:none; position:fixed; inset:0; background:rgba(0,0,0,.28); z-index:35}
 @media (max-width:800px){
+  #backdrop.show{display:block}
   #menubtn{
     display:block; border:1px solid var(--border); background:transparent;
     border-radius:7px; padding:5px 10px; font-size:14px; cursor:pointer;
@@ -262,6 +264,7 @@ ruby rt{font-size:8px; color:var(--muted)}
 <div id="mapbar" title=""></div>
 
 <div id="main">
+  <div id="backdrop"></div>
   <aside id="sidebar"></aside>
   <div id="right">
     <div id="crumbs"></div>
@@ -852,7 +855,7 @@ async function openLaw(key, jumpTo){
   document.querySelectorAll('#subpanel .sprow').forEach(b =>
     b.classList.toggle('on', b.dataset.key === key));
   $('subpanel').classList.remove('show');
-  $('sidebar').classList.remove('show');
+  setSidebar(false);
 
   if (!mem[key]){
     $('loading').classList.add('show');
@@ -915,7 +918,7 @@ $('sidebar').addEventListener('click', e => {
     tnode.classList.toggle('open');   // 下位目次のある行（編・章など）→ 展開/折りたたみ
   } else {
     scrollToDom(row.dataset.id);      // 末端の行 → 本文へジャンプ
-    $('sidebar').classList.remove('show');
+    setSidebar(false);
   }
 });
 $('crumbs').addEventListener('click', e => {
@@ -952,7 +955,12 @@ document.addEventListener('keydown', e => {
     $('q').select();
   }
 });
-$('menubtn').addEventListener('click', () => $('sidebar').classList.toggle('show'));
+function setSidebar(open){
+  $('sidebar').classList.toggle('show', open);
+  $('backdrop').classList.toggle('show', open);
+}
+$('menubtn').addEventListener('click', () => setSidebar(!$('sidebar').classList.contains('show')));
+$('backdrop').addEventListener('click', () => setSidebar(false));
 window.addEventListener('hashchange', () => {
   const m = location.hash.match(/^#([a-z]+)\/(.+)$/);
   if (m && ALL_LAWS.some(l => l.key === m[1])) openLaw(m[1], decodeURIComponent(m[2]));
